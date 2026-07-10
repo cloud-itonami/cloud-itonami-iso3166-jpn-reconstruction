@@ -1,3 +1,13 @@
 ;; Real-world organization location / contact.
 ;; :head-role is institutional title only — no personal names.
-{:contact-page "https://www.reconstruction.go.jp/", :ooyake-id "gov.jpn.reconstruction", :sourced-from "com-etzhayyim-ooyake gov-units (verbatim where present)", :head-role-note "institutional office title only; personal names of current office-holders are intentionally NOT stored", :official-url "https://www.reconstruction.go.jp/", :head-role "復興大臣", :hq {:last-verified "2026-06-02", :phone "03-6328-1111", :line-en "3-1-1 Kasumigaseki, Chiyoda-ku, Tokyo (Central Gov't Bldg No.4)", :line-local "東京都千代田区霞が関3-1-1 中央合同庁舎第4号館", :postal-code "100-0013", :kind "headquarters", :provenance "https://www.reconstruction.go.jp/", :hours "平日 9:30-18:15", :sourcing "representative", :country "jpn"}, :wikidata "Q1056221", :name-en "Reconstruction Agency", :name-local "復興庁"}
+{:ooyake-id "gov.jpn.reconstruction"
+  :official-url "https://www.reconstruction.go.jp/"
+  :name-en "Reconstruction Agency"
+  :name-local "復興庁"
+  :wikidata "Q1056221"
+  :head-role "復興大臣"
+  :head-role-note "institutional office title only; personal names of current office-holders are intentionally NOT stored"
+  :contact-page "https://www.reconstruction.go.jp/"
+  :sourced-from "com-etzhayyim-ooyake gov-units (verbatim where present)"
+  :hq {:postal-code "100-0013" :line-local "東京都千代田区霞が関3-1-1 中央合同庁舎第4号館" :line-en "3-1-1 Kasumigaseki, Chiyoda-ku, Tokyo (Central Gov't Bldg No.4)" :country "jpn" :phone "03-6328-1111" :hours "平日 9:30-18:15" :kind "headquarters" :provenance "https://www.reconstruction.go.jp/" :last-verified "2026-06-02" :sourcing "representative"}
+}

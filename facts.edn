@@ -1,0 +1,499 @@
+;; Regulatory source register for JPN-RECONSTRUCTION special-reconstruction-zone
+;; (復興特区) procurement compliance.
+;;
+;; README.md says: "Every regulatory claim must cite the official Reconstruction
+;; Agency source." docs/operator-guide.md requires "clear provenance (official
+;; Reconstruction Agency source citation) for every requirement surfaced".
+;; docs/business-model.md makes "a false or fabricated regulatory-requirement
+;; claim" a HARD hold that "must be corrected against a cited Reconstruction
+;; Agency source first".
+;;
+;; Until this file existed there was no such list. Three documents required a
+;; citation against a set that did not exist, so no claim in this repository
+;; could be traced to anything, and nothing could tell a real citation from an
+;; invented one. This is that list.
+;;
+;; Shape is tx-data (a vector of entity maps), like every other EDN corpus in
+;; this workspace, so it loads with
+;;   (d/transact conn (edn/read-string (slurp "facts.edn")))
+;; :source/id is the join key. A regulation not in this table has NO
+;; spec-basis for this repository -- extend the table, never invent an id,
+;; a law id, or a URL.
+;;
+;; VERIFIED BY `nbb scripts/verify-facts.cljs`, which re-fetches every entry
+;; from the live authority. Each entry carries a :source/verify tag naming
+;; WHICH check establishes it. The checks are NOT interchangeable, and the
+;; reasons are the main thing this file has to teach.
+;;
+;; ── THE CITATION SURFACE THE AGENCY ITSELF LINKS TO CANNOT BE VERIFIED,
+;;    AND IT IS ON THE SAME HOST AS THE ONE THAT CAN
+;;
+;; www.reconstruction.go.jp/topics/cat-114/sub-cat12-1/ (復興関係法令・基本方針)
+;; cites statutes by linking to
+;;   https://elaws.e-gov.go.jp/search/elawsSearch/elaws_search/lsg0500/detail?lawId=...
+;;
+;; That is a JavaScript single-page app. Measured 2026-08-27, following the
+;; redirect the legacy elaws hostname issues:
+;;
+;;   .../document?lawid=423AC0000000122   (real)        200   800 B  e-Gov 法令検索
+;;   .../document?lawid=999AC9999999999   (fabricated)  200   800 B  e-Gov 法令検索
+;;
+;; Same status, same byte count, same title, for a law that exists and one
+;; that does not. The identifier never reaches the server in a way that
+;; changes the response -- the shell is served first and the document is
+;; fetched by script afterwards. A checker pointed here reports PASS for
+;; every fabricated id anyone ever writes down.
+;;
+;; That is the whole failure this register exists to prevent, sitting on the
+;; authority's own page.
+;;
+;; The sharp part is where it goes. elaws.e-gov.go.jp 301s to
+;; laws.e-gov.go.jp -- so the surface that cannot discriminate and the
+;; surface that can are THE SAME HOST, separated only by path:
+;;
+;;   laws.e-gov.go.jp/document?lawid=999AC9999999999      200  800 B   shell
+;;   laws.e-gov.go.jp/api/2/law_data/999AC9999999999      404  code 404004
+;;   laws.e-gov.go.jp/api/2/law_data/423AC0000000122      200  full text
+;;
+;; So "is this citation verifiable" is not a question about the hostname, and
+;; an allowlist of trusted authorities would answer it wrong. It is a
+;; question about the exact path, which is why :host/kind is declared per
+;; entry-point here rather than per domain, and why the verifier proves the
+;; indistinguishability each run instead of trusting this paragraph.
+;;
+;; The verifier REFUSES (exit 2) rather than checking a statute at the shell,
+;; and resolves every statute at /api/2/law_data/ instead.
+;;
+;; ── A LAW ID IS NOT DERIVABLE FROM ERA, YEAR AND NUMBER
+;;
+;; 東日本大震災復興基本法 is 平成23年法律第76号. The id built from those three
+;; facts the way every other Act in this file is built -- 423AC0000000076 --
+;; is a 404. The real id is 423AC1000000076.
+;;
+;; The AC0/AC1 segment distinguishes a cabinet-submitted Act (閣法) from a
+;; member-submitted one (議員立法), and nothing on the face of the citation
+;; says which a given law is. 東日本大震災復興基本法 was member-submitted; the
+;; 復興特別区域法 and 復興庁設置法 beside it were not.
+;;
+;; So an author who constructs ids instead of looking them up gets a
+;; plausible-looking string that is wrong, and there is no reason a wrong id
+;; must 404 rather than resolve to some unrelated statute. Every
+;; :statute/law-id here was read back from the API, never assembled.
+;;
+;; ── A REPEALED REGULATION ANSWERS 200 WITH ITS FULL TEXT
+;;
+;; e-Gov keeps repealed law text served. Measured 2026-08-27:
+;;
+;;   423M60000100151  厚生労働省関係東日本大震災復興特別区域法施行規則
+;;                    200, full text, repeal_status "Repeal"
+;;
+;; Status alone certifies it as a live obligation. For a register whose whole
+;; job is telling a real requirement from an invented one, publishing a
+;; repealed rule as current IS the fabricated regulatory claim that
+;; docs/business-model.md calls a HARD hold. :statute/repealed? is checked on
+;; every entry, and the repealed rule above is kept IN the register, marked,
+;; as a live control that the check still discriminates.
+;;
+;; ── repeal_status IS THE STRING "None", NOT null
+;;
+;; For a law in force the API sends the four characters None inside quotes:
+;;
+;;   "repeal_status":"None"
+;;
+;; It is a truthy string in every language this workspace uses. A verifier
+;; written the obvious way --
+;;
+;;   (if (:repeal_status rev) :repealed :in-force)
+;;
+;; marks EVERY law repealed, including the ones in force; written the other
+;; obvious way, comparing to nil, it marks every law in force, including the
+;; repealed one. Both fail silently in a direction that looks like a working
+;; check. The verifier compares against the literal strings, and its
+;; self-tests assert that a "None" is not read as a repeal.
+;;
+;; ── THE AGENCY'S OWN LINKS 301, SO THE URL YOU COPY IS NOT THE URL THAT
+;;    ANSWERS
+;;
+;; Every deep link on this site redirects. Measured 2026-08-27:
+;;
+;;   /topics/000344.html            301 -> /topics/cat-11/cat-45/000344/
+;;   /topics/main-cat12/sub-cat12-1/ 301 -> /topics/cat-114/sub-cat12-1/
+;;   /topics/main-cat9/sub-cat9-1/   301 -> /topics/cat-93/sub-cat9-1/
+;;
+;; but /topics/main-cat12/ does NOT redirect, so this is per-page and cannot
+;; be normalised by a rule. A verifier that does not follow redirects calls
+;; three live pages dead; one that follows them silently loses the fact that
+;; the recorded citation is a stale path, which is the thing an operator
+;; needs to know before pasting it into a filing.
+;;
+;; So both are stored: :page/url is where the page actually is, :page/via is
+;; the path the agency still publishes, and :page/redirects? asserts which.
+;; A via-path that stops redirecting, or lands somewhere new, is a change in
+;; the citation and is reported.
+;;
+;; ── THE PUBLISHED sitemap.xml NAMES A HOST THAT SERVES NOTHING
+;;
+;; https://www.reconstruction.go.jp/sitemap.xml is 1.1 MB and lists 7,594
+;; URLs. Every one of them is on reconstruction.r-cms.jp -- the CMS vendor's
+;; origin -- and not on the official host. Measured 2026-08-27:
+;;
+;;   https://reconstruction.r-cms.jp/                  403 Forbidden  118 B
+;;   https://reconstruction.r-cms.jp/topics/000344.html 403 Forbidden 118 B
+;;   https://www.reconstruction.go.jp/topics/000344.html 200         108 KB
+;;
+;; The site's only machine-readable index of itself is therefore unusable as
+;; a citation source, and an ingest that harvested it would carry a vendor
+;; hostname into a compliance record for every requirement it surfaced. It is
+;; registered as :host/kind :non-authoritative-origin so that the next author
+;; who finds the sitemap finds this note first, and the verifier asserts the
+;; 403 still stands rather than leaving the claim as folklore.
+;;
+;; ── THE 404 PAGE CARRIES THE WHOLE SITE NAVIGATION
+;;
+;; www.reconstruction.go.jp answers a missing page honestly -- status 404,
+;; title 「ページが存在しません。 | 復興庁」 -- but the body is 65 KB because
+;; the site chrome is on it. So the obvious needles are on the missing page.
+;; Measured 2026-08-27, against the 404 body:
+;;
+;;   復興特別区域     PRESENT   <- would pass on a deleted page
+;;   調達情報         PRESENT   <- and this is the 調達情報 page's own <h1>
+;;   東日本大震災復興特別区域法  absent   <- discriminates
+;;
+;; The procurement page cannot be checked by its own heading. Every
+;; :page/must-contain in this file was tested against a live 404 body and
+;; rejected if present, and the verifier re-runs that test each time so that
+;; a needle which migrates into the site chrome is REFUSED rather than
+;; quietly becoming decorative.
+
+[;; ── HOSTS ──────────────────────────────────────────────────────────────
+ ;; Declared per host because they do not behave alike, and a verifier
+ ;; written against one of them is wrong about the others.
+
+ {:host/name "www.reconstruction.go.jp"
+  :host/kind :page
+  :host/charset "utf-8"
+  :host/charset-in-header? true
+  :host/missing-status 404
+  :host/missing-title "ページが存在しません。 | 復興庁"
+  :host/missing-probe "https://www.reconstruction.go.jp/topics/cat-114/"
+  :host/note
+  "Honest 404 (status AND distinctive title), UTF-8 declared in the header.
+   Both are asserted at run time, because the needles in this file were
+   chosen against this host's 404 body and stop meaning anything if it
+   changes."
+  :host/measured "2026-08-27"}
+
+ {:host/name "laws.e-gov.go.jp"
+  :host/kind :statute-api
+  :host/api-base "https://laws.e-gov.go.jp/api/2/law_data/"
+  :host/missing-status 404
+  :host/live-repeal-token "None"
+  :host/repeal-tokens ["Repeal" "LossOfEffectiveness"]
+  :host/note
+  "The only surface here that discriminates a real law id from a fabricated
+   one. Returns 404 for an unknown id and 200 with full text for a known
+   one, INCLUDING repealed ones -- see :statute/repealed?. Note this is the
+   same domain that serves the indistinguishable SPA shell at /document;
+   only /api/2/law_data/ answers the question."
+  :host/measured "2026-08-27"}
+
+ {:host/name "elaws.e-gov.go.jp"
+  :host/kind :indistinguishable
+  :host/probe-real "https://elaws.e-gov.go.jp/document?lawid=423AC0000000122"
+  :host/probe-fake "https://elaws.e-gov.go.jp/document?lawid=999AC9999999999"
+  :host/redirects-to "https://laws.e-gov.go.jp/document"
+  :host/note
+  "JavaScript SPA, and a legacy hostname: it 301s to laws.e-gov.go.jp, the
+   SAME host that serves the discriminating API above. Same 800-byte shell,
+   status 200, title 「e-Gov 法令検索」 for a real law id and a fabricated one.
+   This is where the agency's own 復興関係法令 page sends a reader for every
+   statute it cites. Registered as a distinct entry-point rather than folded
+   into laws.e-gov.go.jp precisely because the domain does not determine the
+   answer -- the path does. Page checks against it are REFUSED, never passed
+   and never failed; a check that cannot fail is not evidence."
+  :host/measured "2026-08-27"}
+
+ {:host/name "reconstruction.r-cms.jp"
+  :host/kind :non-authoritative-origin
+  :host/expect-status 403
+  :host/probe "https://reconstruction.r-cms.jp/topics/000344.html"
+  :host/note
+  "CMS vendor origin. Named by every one of the 7,594 <loc> entries in the
+   agency's published sitemap.xml, and serves 403 Forbidden for all of them.
+   Never cite this host. Registered so the trap is discoverable, and probed
+   so the claim stays measured."
+  :host/measured "2026-08-27"}
+
+ ;; ── STATUTES: THE RECONSTRUCTION-ZONE SIDE ─────────────────────────────
+ ;; What makes a 復興特区 a 復興特区, who designates one, and what an
+ ;; operator inside one is subject to.
+
+ {:source/id :law/tokku
+  :source/verify :statute-api
+  :source/role "The 復興特区 regime itself: 復興推進計画 authorisation, and the
+                regulatory, procedural and tax special measures that attach to
+                an authorised zone. The single statute this repository is
+                about."
+  :statute/law-id "423AC0000000122"
+  :statute/title "東日本大震災復興特別区域法"
+  :statute/law-num "平成二十三年法律第百二十二号"
+  :statute/kind "Act"
+  :statute/promulgated "2011-12-14"
+  :statute/repealed? false}
+
+ {:source/id :law/tokku-order
+  :source/verify :statute-api
+  :source/role "Cabinet Order under the 復興特別区域法 -- the thresholds and
+                designations the Act delegates."
+  :statute/law-id "423CO0000000409"
+  :statute/title "東日本大震災復興特別区域法施行令"
+  :statute/law-num "平成二十三年政令第四百九号"
+  :statute/kind "CabinetOrder"
+  :statute/promulgated "2011-12-22"
+  :statute/repealed? false}
+
+ {:source/id :law/tokku-rules
+  :source/verify :statute-api
+  :source/role "Cabinet Office Ordinance under the 復興特別区域法 -- the actual
+                application forms and filing procedure an operator meets."
+  :statute/law-id "423M60000002069"
+  :statute/title "東日本大震災復興特別区域法施行規則"
+  :statute/law-num "平成二十三年内閣府令第六十九号"
+  :statute/kind "MinisterialOrdinance"
+  :statute/promulgated "2011-12-22"
+  :statute/repealed? false}
+
+ {:source/id :law/kihon
+  :source/verify :statute-api
+  :source/role "The framework Act the whole reconstruction regime hangs from.
+                Member-submitted, which is why its id carries AC1 -- see the
+                law-id note in the header."
+  :statute/law-id "423AC1000000076"
+  :statute/title "東日本大震災復興基本法"
+  :statute/law-num "平成二十三年法律第七十六号"
+  :statute/kind "Act"
+  :statute/promulgated "2011-06-24"
+  :statute/repealed? false
+  :statute/id-not-derivable
+  "423AC0000000076, the id built from era+year+number, is a 404. Looked up,
+   not assembled."}
+
+ {:source/id :law/agency-act
+  :source/verify :statute-api
+  :source/role "Establishes the Reconstruction Agency and fixes its remit --
+                the basis on which this repository's counterparty can act at
+                all. organization.edn's :head-role 復興大臣 is this Act's
+                office."
+  :statute/law-id "423AC0000000125"
+  :statute/title "復興庁設置法"
+  :statute/law-num "平成二十三年法律第百二十五号"
+  :statute/kind "Act"
+  :statute/promulgated "2011-12-16"
+  :statute/repealed? false}
+
+ {:source/id :law/agency-org-order
+  :source/verify :statute-api
+  :source/role "Internal organisation of the Agency -- which bureau an
+                operator's filing is actually addressed to."
+  :statute/law-id "424CO0000000022"
+  :statute/title "復興庁組織令"
+  :statute/law-num "平成二十四年政令第二十二号"
+  :statute/kind "CabinetOrder"
+  :statute/promulgated "2012-02-01"
+  :statute/repealed? false}
+
+ {:source/id :law/fukushima
+  :source/verify :statute-api
+  :source/role "The Fukushima-specific regime, which layers further special
+                measures on top of the 復興特区 ones. An operator in a
+                Fukushima zone is subject to both; treating this as an
+                alternative to :law/tokku is a category error."
+  :statute/law-id "424AC0000000025"
+  :statute/title "福島復興再生特別措置法"
+  :statute/law-num "平成二十四年法律第二十五号"
+  :statute/kind "Act"
+  :statute/promulgated "2012-03-31"
+  :statute/repealed? false}
+
+ {:source/id :law/large-scale-disaster
+  :source/verify :statute-api
+  :source/role "The general (non-東日本大震災) large-disaster reconstruction
+                regime. Applies to a designated disaster that is not the 2011
+                one -- the statute a future zone would be built under."
+  :statute/law-id "425AC0000000055"
+  :statute/title "大規模災害からの復興に関する法律"
+  :statute/law-num "平成二十五年法律第五十五号"
+  :statute/kind "Act"
+  :statute/promulgated "2013-06-21"
+  :statute/repealed? false}
+
+ {:source/id :law/disaster-urban
+  :source/verify :statute-api
+  :source/role "被災市街地復興推進地域 -- the pre-2011 urban reconstruction
+                zoning power, still in force and still the instrument that
+                constrains land use inside many reconstruction areas."
+  :statute/law-id "407AC0000000014"
+  :statute/title "被災市街地復興特別措置法"
+  :statute/law-num "平成七年法律第十四号"
+  :statute/kind "Act"
+  :statute/promulgated "1995-02-26"
+  :statute/repealed? false}
+
+ ;; ── STATUTES: THE PROCUREMENT SIDE ─────────────────────────────────────
+ ;; The repository's offer is "special procurement-rule checklist specific to
+ ;; designated reconstruction areas". The special rules are special RELATIVE
+ ;; to these. An operator bidding inside a zone is subject to both sets, and
+ ;; a checklist that cites only the reconstruction statutes has omitted the
+ ;; law that actually governs the bid.
+
+ {:source/id :law/accounts
+  :source/verify :statute-api
+  :source/role "The Accounts Act: general-competitive tendering as the default
+                for state contracts, and the exhaustive grounds for departing
+                from it. The baseline any 復興特区 procurement special measure
+                is an exception to."
+  :statute/law-id "322AC0000000035"
+  :statute/title "会計法"
+  :statute/law-num "昭和二十二年法律第三十五号"
+  :statute/kind "Act"
+  :statute/promulgated "1947-03-31"
+  :statute/repealed? false}
+
+ {:source/id :law/accounts-order
+  :source/verify :statute-api
+  :source/role "Budget, Settlement and Accounts Order -- the operative
+                thresholds, qualification requirements and notice periods a
+                bidder is actually measured against."
+  :statute/law-id "322IO0000000165"
+  :statute/title "予算決算及び会計令"
+  :statute/law-num "昭和二十二年勅令第百六十五号"
+  :statute/kind "ImperialOrder"
+  :statute/promulgated "1947-04-30"
+  :statute/repealed? false}
+
+ {:source/id :law/kankojyu
+  :source/verify :statute-api
+  :source/role "SME set-aside in public procurement. The Agency publishes its
+                own 中小企業者に関する契約の方針 under this Act -- see
+                :page/procurement, which is where the current one is."
+  :statute/law-id "341AC0000000097"
+  :statute/title "官公需についての中小企業者の受注の確保に関する法律"
+  :statute/law-num "昭和四十一年法律第九十七号"
+  :statute/kind "Act"
+  :statute/promulgated "1966-06-30"
+  :statute/repealed? false}
+
+ {:source/id :law/public-works-tender
+  :source/verify :statute-api
+  :source/role "Public-works tendering integrity: disclosure duties, bid-rigging
+                reporting, and the conduct rules that bind a contractor on a
+                disaster-recovery infrastructure or housing contract."
+  :statute/law-id "412AC0000000127"
+  :statute/title "公共工事の入札及び契約の適正化の促進に関する法律"
+  :statute/law-num "平成十二年法律第百二十七号"
+  :statute/kind "Act"
+  :statute/promulgated "2000-11-27"
+  :statute/repealed? false}
+
+ ;; ── REPEALED, AND KEPT ─────────────────────────────────────────────────
+
+ {:source/id :law/mhlw-tokku-rules-repealed
+  :source/verify :statute-api
+  :source/role "NOT a live obligation. Repealed 2021-04-01. Kept in the
+                register for two reasons: an operator working from older
+                reconstruction paperwork will meet this citation and needs to
+                be told it is dead rather than finding it absent; and it is
+                the live control proving the repeal check still discriminates
+                -- e-Gov serves this at 200 with its full text, exactly like
+                every statute above."
+  :statute/law-id "423M60000100151"
+  :statute/title "厚生労働省関係東日本大震災復興特別区域法施行規則"
+  :statute/law-num "平成二十三年厚生労働省令第百五十一号"
+  :statute/kind "MinisterialOrdinance"
+  :statute/promulgated "2011-12-22"
+  :statute/repealed? true}
+
+ ;; ── AGENCY PAGES ───────────────────────────────────────────────────────
+ ;; :page/url is where the page is. :page/via is the path the agency still
+ ;; publishes and still redirects from. :page/must-contain was tested against
+ ;; a live 404 body; the verifier re-tests it every run.
+
+ {:source/id :page/agency-home
+  :source/verify :page
+  :source/role "The URL organization.edn records as :official-url and
+                :contact-page. Registered so that this repository's own
+                recorded contact point is re-checked rather than assumed."
+  :page/url "https://www.reconstruction.go.jp/"
+  :page/title "復興庁"
+  :page/redirects? false
+  :page/must-contain
+  "前例にとらわれず、果断に復興事業を実施するための組織として、内閣に設置された組織です。"
+  :page/needle-note
+  "The agency's statement of its own remit. Every navigation label on this
+   page -- 被災者支援, 復興の現状 -- is also on the 404 body, so none of them
+   can be used. Dated headlines discriminate but rot within weeks."}
+
+ {:source/id :page/law-index
+  :source/verify :page
+  :source/role "復興関係法令・基本方針. The agency's own list of the statutes
+                above, and where the current 復興の基本方針 Cabinet decision is
+                published. Also the page whose statute links point at the
+                indistinguishable SPA host."
+  :page/url "https://www.reconstruction.go.jp/topics/cat-114/sub-cat12-1/"
+  :page/via "https://www.reconstruction.go.jp/topics/main-cat12/sub-cat12-1/"
+  :page/title "復興関係法令・基本方針 | 復興庁"
+  :page/redirects? true
+  :page/must-contain "復興関係法令"}
+
+ {:source/id :page/procurement
+  :source/verify :page
+  :source/role "調達情報. Where the Agency publishes its 中小企業者に関する契約の
+                方針 under :law/kankojyu, its 入札・公募 notices, and its
+                予算執行 disclosures. The primary page behind the repository's
+                procurement-rule checklist."
+  :page/url "https://www.reconstruction.go.jp/topics/cat-93/sub-cat9-1/"
+  :page/via "https://www.reconstruction.go.jp/topics/main-cat9/sub-cat9-1/"
+  :page/title "調達情報 | 復興庁"
+  :page/redirects? true
+  :page/must-contain "中小企業者に関する契約の方針"
+  :page/needle-note
+  "This page's own <h1> is 調達情報, which is on the 404 body -- the one page
+   in this register that cannot be checked by its own heading."}
+
+ {:source/id :page/tokku-law
+  :source/verify :page
+  :source/role "The Agency's page for the 復興特別区域法, carrying the Act, its
+                subordinate legislation and the outline materials an operator
+                is pointed to first."
+  :page/url "https://www.reconstruction.go.jp/topics/cat-11/cat-45/000344/"
+  :page/via "https://www.reconstruction.go.jp/topics/000344.html"
+  :page/title "東日本大震災復興特別区域法 | 復興庁"
+  :page/redirects? true
+  :page/must-contain "東日本大震災復興特別区域法"}
+
+ {:source/id :page/kihon-law
+  :source/verify :page
+  :source/role "The Agency's page for the 東日本大震災復興基本法."
+  :page/url "https://www.reconstruction.go.jp/topics/cat-114/cat-231/000297/"
+  :page/via "https://www.reconstruction.go.jp/topics/000297.html"
+  :page/title "東日本大震災復興基本法（平成23年法律第76号） | 復興庁"
+  :page/redirects? true
+  :page/must-contain "東日本大震災復興基本法"}
+
+ {:source/id :page/agency-act
+  :source/verify :page
+  :source/role "The Agency's page for the 復興庁設置法."
+  :page/url "https://www.reconstruction.go.jp/topics/cat-114/cat-231/000348/"
+  :page/via "https://www.reconstruction.go.jp/topics/000348.html"
+  :page/title "復興庁設置法（平成23年法律第125号） | 復興庁"
+  :page/redirects? true
+  :page/must-contain "復興庁設置法"}
+
+ {:source/id :page/fukushima-law
+  :source/verify :page
+  :source/role "The Agency's page for the 福島復興再生特別措置法."
+  :page/url "https://www.reconstruction.go.jp/topics/cat-114/cat-231/cat-232/000783/"
+  :page/via "https://www.reconstruction.go.jp/topics/000783.html"
+  :page/title "福島復興再生特別措置法（平成24年法律第25号） | 復興庁"
+  :page/redirects? true
+  :page/must-contain "福島復興再生特別措置法"}]
